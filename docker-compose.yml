@@ -23,7 +23,6 @@ services:
       start_period: 5s
     networks:
       - isolated_network
-    network_mode: none
 
   # Agent controller - runs the test commands and then exits
   agent:
