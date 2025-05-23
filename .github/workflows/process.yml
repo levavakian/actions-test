@@ -27,15 +27,15 @@ jobs:
       - name: Build and run docker-compose
         run: |
           echo "Building and starting docker-compose services..."
-          docker-compose up --build --abort-on-container-exit
+          docker compose up --build --abort-on-container-exit
           echo "Docker-compose execution completed."
           
           # Get logs from all services
           echo "=== FINAL LOGS FROM ALL SERVICES ==="
-          docker-compose logs
+          docker compose logs
           
           # Clean up
           echo "Cleaning up containers and volumes..."
-          docker-compose down -v
+          docker compose down -v
           
           echo "Build and test process completed successfully!"
