@@ -22,11 +22,50 @@ jobs:
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2  # Need to fetch previous commit to compare
 
-      # Build and run docker-compose with log output
-      - name: Build and run docker-compose
+      # Detect which submission folder has changes
+      - name: Detect changed submission
+        id: detect_submission
         run: |
-          echo "Building and starting docker-compose services..."
+          # Get changed files between HEAD and previous commit
+          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+          
+          # Find submissions folders that have changes
+          CHANGED_SUBMISSIONS=$(echo "$CHANGED_FILES" | grep "^submissions/" | cut -d'/' -f2 | sort | uniq)
+          SUBMISSION_COUNT=$(echo "$CHANGED_SUBMISSIONS" | wc -w)
+          
+          echo "Changed submissions: $CHANGED_SUBMISSIONS"
+          echo "Number of changed submissions: $SUBMISSION_COUNT"
+          
+          # Check if exactly one submission folder has changes
+          if [ "$SUBMISSION_COUNT" -eq 1 ] && [ -n "$CHANGED_SUBMISSIONS" ]; then
+            echo "SUBMISSION_FOLDER=$CHANGED_SUBMISSIONS" >> $GITHUB_OUTPUT
+            echo "RUN_BUILD=true" >> $GITHUB_OUTPUT
+            echo "Will build submission: $CHANGED_SUBMISSIONS"
+          else
+            echo "RUN_BUILD=false" >> $GITHUB_OUTPUT
+            if [ "$SUBMISSION_COUNT" -eq 0 ]; then
+              echo "No submission folders changed - skipping build"
+            else
+              echo "Multiple submission folders changed - skipping build"
+            fi
+          fi
+
+      # Build and run docker-compose with log output (only if exactly one submission changed)
+      - name: Build and run docker-compose
+        if: steps.detect_submission.outputs.RUN_BUILD == 'true'
+        env:
+          SUBMISSION_FOLDER: ${{ steps.detect_submission.outputs.SUBMISSION_FOLDER }}
+        run: |
+          echo "Building and starting docker-compose services for submission: $SUBMISSION_FOLDER"
+          
+          # Export the submission folder for docker-compose
+          export SUBMISSION_FOLDER=$SUBMISSION_FOLDER
+          
           docker compose up --build --abort-on-container-exit
           echo "Docker-compose execution completed."
           
@@ -39,3 +78,9 @@ jobs:
           docker compose down -v
           
           echo "Build and test process completed successfully!"
+
+      # Skip message
+      - name: Skip build message
+        if: steps.detect_submission.outputs.RUN_BUILD == 'false'
+        run: |
+          echo "Build skipped - changes must be in exactly one submission folder"

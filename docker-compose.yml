@@ -1,12 +1,12 @@
 version: '3.8'
 
 services:
-  # Command server (submission_a) - starts first and stays running
-  submission_a:
+  # Command server (submission) - starts first and stays running
+  submission:
     build:
-      context: ./submissions/submission_a
+      context: ./submissions/${SUBMISSION_FOLDER:-submission_a}
       dockerfile: Dockerfile
-    container_name: submission_a_server
+    container_name: submission_server
     volumes:
       - shared_pipes:/shared
     # Keep the container running and restart if it fails
@@ -21,6 +21,9 @@ services:
       timeout: 1s
       retries: 30
       start_period: 5s
+    networks:
+      - isolated_network
+    network_mode: none
 
   # Agent controller - runs the test commands and then exits
   agent:
@@ -31,14 +34,24 @@ services:
     volumes:
       - shared_pipes:/shared
     depends_on:
-      submission_a:
+      submission:
         condition: service_healthy
     # Agent should exit after completing its work
     restart: "no"
     environment:
       - PYTHONUNBUFFERED=1
+    # Agent has access to both networks for communication
+    networks:
+      - default
+      - isolated_network
 
 volumes:
   # Shared volume for named pipes communication
   shared_pipes:
     driver: local
+
+networks:
+  # Internal network with no external internet access
+  isolated_network:
+    driver: bridge
+    internal: true
