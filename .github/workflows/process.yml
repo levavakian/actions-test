@@ -23,12 +23,19 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
 
-      # Runs a single command using the runners shell
-      - name: Run a one-line script
-        run: echo Hello, world!
-
-      # Runs a set of commands using the runners shell
-      - name: Run a multi-line script
+      # Build and run docker-compose with log output
+      - name: Build and run docker-compose
         run: |
-          echo Add other actions to build,
-          echo test, and deploy your project.
+          echo "Building and starting docker-compose services..."
+          docker-compose up --build --abort-on-container-exit
+          echo "Docker-compose execution completed."
+          
+          # Get logs from all services
+          echo "=== FINAL LOGS FROM ALL SERVICES ==="
+          docker-compose logs
+          
+          # Clean up
+          echo "Cleaning up containers and volumes..."
+          docker-compose down -v
+          
+          echo "Build and test process completed successfully!"

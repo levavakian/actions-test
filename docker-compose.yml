@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  # Command server (submission_a) - starts first and stays running
+  submission_a:
+    build:
+      context: ./submissions/submission_a
+      dockerfile: Dockerfile
+    container_name: submission_a_server
+    volumes:
+      - shared_pipes:/shared
+    # Keep the container running and restart if it fails
+    restart: unless-stopped
+    # Add some debug output
+    environment:
+      - PYTHONUNBUFFERED=1
+    # Health check to ensure the server is ready
+    healthcheck:
+      test: ["CMD", "test", "-p", "/shared/command_pipe", "-a", "-p", "/shared/response_pipe"]
+      interval: 2s
+      timeout: 1s
+      retries: 30
+      start_period: 5s
+
+  # Agent controller - runs the test commands and then exits
+  agent:
+    build:
+      context: ./agent
+      dockerfile: Dockerfile
+    container_name: agent_controller
+    volumes:
+      - shared_pipes:/shared
+    depends_on:
+      submission_a:
+        condition: service_healthy
+    # Agent should exit after completing its work
+    restart: "no"
+    environment:
+      - PYTHONUNBUFFERED=1
+
+volumes:
+  # Shared volume for named pipes communication
+  shared_pipes:
+    driver: local
