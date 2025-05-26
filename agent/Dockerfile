@@ -13,6 +13,10 @@ RUN apt-get update && apt-get install -y \
 # Create the shared directory for named pipes
 RUN mkdir -p /shared
 
+# Copy requirements file and install Python dependencies
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
+
 # Copy the Python scripts
 COPY command_client.py /app/agent/command_client.py
 COPY run_loop.py /app/run_loop.py

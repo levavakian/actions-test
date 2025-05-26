@@ -55,29 +55,18 @@ jobs:
             fi
           fi
 
-      # Build and run docker-compose with log output (only if exactly one submission changed)
-      - name: Build and run docker-compose
+      # Make run.sh executable and run it (only if exactly one submission changed)
+      - name: Run submission using run.sh
         if: steps.detect_submission.outputs.RUN_BUILD == 'true'
         env:
-          SUBMISSION_FOLDER: ${{ steps.detect_submission.outputs.SUBMISSION_FOLDER }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          echo "Building and starting docker-compose services for submission: $SUBMISSION_FOLDER"
+          echo "Running submission using run.sh: ${{ steps.detect_submission.outputs.SUBMISSION_FOLDER }}"
           
-          # Export the submission folder for docker-compose
-          export SUBMISSION_FOLDER=$SUBMISSION_FOLDER
+          # Run the submission using run.sh
+          ./run.sh ${{ steps.detect_submission.outputs.SUBMISSION_FOLDER }}
           
-          docker compose up --build --abort-on-container-exit
-          echo "Docker-compose execution completed."
-          
-          # Get logs from all services
-          echo "=== FINAL LOGS FROM ALL SERVICES ==="
-          docker compose logs
-          
-          # Clean up
-          echo "Cleaning up containers and volumes..."
-          docker compose down -v
-          
-          echo "Build and test process completed successfully!"
+          echo "Submission execution completed successfully!"
 
       # Skip message
       - name: Skip build message

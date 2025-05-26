@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Command server (submission) - starts first and stays running
   submission:
@@ -32,6 +30,8 @@ services:
     container_name: agent_controller
     volumes:
       - shared_pipes:/shared
+      # Mount PROMPT.json if it exists in the submission folder
+      - ./submissions/${SUBMISSION_FOLDER:-submission_a}/PROMPT.json:/app/PROMPT.json:ro
     depends_on:
       submission:
         condition: service_healthy
@@ -39,6 +39,7 @@ services:
     restart: "no"
     environment:
       - PYTHONUNBUFFERED=1
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
     # Agent has access to both networks for communication
     networks:
       - default

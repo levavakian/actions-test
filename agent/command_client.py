@@ -9,11 +9,12 @@ import json
 import sys
 import uuid
 import time
+import argparse
 
 COMMAND_PIPE = "/shared/command_pipe"
 RESPONSE_PIPE = "/shared/response_pipe"
 
-def send_command(command, timeout=30):
+def send_command(command, working_dir=None, timeout=30):
     """Send a command and wait for the response"""
     request_id = str(uuid.uuid4())
     
@@ -22,6 +23,10 @@ def send_command(command, timeout=30):
         "id": request_id,
         "command": command
     }
+    
+    # Add working directory if specified
+    if working_dir:
+        request["working_dir"] = working_dir
     
     # Send command
     with open(COMMAND_PIPE, 'w') as f:
@@ -77,15 +82,29 @@ def send_command(command, timeout=30):
         }
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: command_client.py <command>")
-        print("Example: command_client.py 'ls -la'")
+    parser = argparse.ArgumentParser(description='Send commands to isolated container')
+    parser.add_argument('command', nargs='?', help='Command to execute')
+    parser.add_argument('-d', '--working-dir', help='Working directory for command execution')
+    parser.add_argument('-c', '--command-arg', help='Alternative way to specify command')
+    
+    args = parser.parse_args()
+    
+    # Determine the command
+    if args.command:
+        command = args.command
+    elif args.command_arg:
+        command = args.command_arg
+    else:
+        print("Usage: command_client.py [-d WORKING_DIR] <command>")
+        print("   or: command_client.py -c <command> [-d WORKING_DIR]")
+        print("\nExamples:")
+        print("  command_client.py 'ls -la'")
+        print("  command_client.py -d /tmp 'pwd'")
+        print("  command_client.py -c 'echo hello' -d /home")
         sys.exit(1)
     
-    command = ' '.join(sys.argv[1:])
-    
     # Send command and get response
-    response = send_command(command)
+    response = send_command(command, working_dir=args.working_dir)
     
     # Display results
     if response.get("stdout"):
