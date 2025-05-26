@@ -141,85 +141,79 @@ def main():
         print(f"STEP {current_step}/{max_steps} (Steps remaining: {remaining_steps})")
         print(f"{'='*60}")
         
-        try:
-            # Call OpenAI O3
-            response = client.chat.completions.create(
-                model="o3",
-                messages=messages,
-                tools=tools,
-                tool_choice="auto"
-            )
+        response = client.chat.completions.create(
+            model="o3",
+            messages=messages,
+            tools=tools,
+            tool_choice="auto"
+        )
+        
+        message = response.choices[0].message
+        messages.append(message)
+        
+        print(f"O3 Response: {message.content}")
+        
+        # Check if tools were called
+        if message.tool_calls:
+            tool_results = []
             
-            message = response.choices[0].message
-            messages.append(message)
-            
-            print(f"O3 Response: {message.content}")
-            
-            # Check if tools were called
-            if message.tool_calls:
-                tool_results = []
+            for tool_call in message.tool_calls:
+                function_name = tool_call.function.name
+                function_args = json.loads(tool_call.function.arguments)
                 
-                for tool_call in message.tool_calls:
-                    function_name = tool_call.function.name
-                    function_args = json.loads(tool_call.function.arguments)
+                print(f"\nExecuting tool: {function_name}")
+                print(f"Arguments: {function_args}")
+                
+                if function_name == "bash":
+                    command = function_args.get("command")
+                    working_dir = function_args.get("working_directory")
                     
-                    print(f"\nExecuting tool: {function_name}")
-                    print(f"Arguments: {function_args}")
+                    print(f"Running bash command: {command}")
+                    if working_dir:
+                        print(f"In directory: {working_dir}")
                     
-                    if function_name == "bash":
-                        command = function_args.get("command")
-                        working_dir = function_args.get("working_directory")
-                        
-                        print(f"Running bash command: {command}")
-                        if working_dir:
-                            print(f"In directory: {working_dir}")
-                        
-                        result = run_bash_command(command, working_dir)
-                        
-                        print(f"Return code: {result['returncode']}")
-                        if result['stdout']:
-                            print(f"STDOUT:\n{result['stdout']}")
-                        if result['stderr']:
-                            print(f"STDERR:\n{result['stderr']}")
-                        
-                        tool_result = {
-                            "tool_call_id": tool_call.id,
-                            "role": "tool",
-                            "content": json.dumps({
-                                "stdout": result['stdout'],
-                                "stderr": result['stderr'],
-                                "returncode": result['returncode']
-                            })
-                        }
-                        tool_results.append(tool_result)
-                        
-                    elif function_name == "terminate":
-                        reason = function_args.get("reason", "No reason provided")
-                        print(f"Terminating: {reason}")
-                        print(f"\n{'='*60}")
-                        print("Agent terminated successfully!")
-                        print(f"Completed {current_step} steps out of {max_steps}")
-                        print(f"{'='*60}")
-                        return
+                    result = run_bash_command(command, working_dir)
+                    
+                    print(f"Return code: {result['returncode']}")
+                    if result['stdout']:
+                        print(f"STDOUT:\n{result['stdout']}")
+                    if result['stderr']:
+                        print(f"STDERR:\n{result['stderr']}")
+                    
+                    tool_result = {
+                        "tool_call_id": tool_call.id,
+                        "role": "tool",
+                        "content": json.dumps({
+                            "stdout": result['stdout'],
+                            "stderr": result['stderr'],
+                            "returncode": result['returncode']
+                        })
+                    }
+                    tool_results.append(tool_result)
+                    
+                elif function_name == "terminate":
+                    reason = function_args.get("reason", "No reason provided")
+                    print(f"Terminating: {reason}")
+                    print(f"\n{'='*60}")
+                    print("Agent terminated successfully!")
+                    print(f"Completed {current_step} steps out of {max_steps}")
+                    print(f"{'='*60}")
+                    return
+            
+            # Add tool results to messages
+            messages.extend(tool_results)
+            
+            # Add follow-up message with remaining steps
+            if remaining_steps > 0:
+                follow_up = f"Tool execution completed. You have {remaining_steps} steps remaining."
+                messages.append({"role": "user", "content": follow_up})
+            
+        else:
+            # No tools called, reprompt with remaining steps
+            if remaining_steps > 0:
+                reprompt = f"No tools were called. You have {remaining_steps} steps remaining. Please use the available tools to perform useful work."
+                messages.append({"role": "user", "content": reprompt})
                 
-                # Add tool results to messages
-                messages.extend(tool_results)
-                
-                # Add follow-up message with remaining steps
-                if remaining_steps > 0:
-                    follow_up = f"Tool execution completed. You have {remaining_steps} steps remaining."
-                    messages.append({"role": "user", "content": follow_up})
-                
-            else:
-                # No tools called, reprompt with remaining steps
-                if remaining_steps > 0:
-                    reprompt = f"No tools were called. You have {remaining_steps} steps remaining. Please use the available tools to perform useful work."
-                    messages.append({"role": "user", "content": reprompt})
-                
-        except Exception as e:
-            print(f"Error calling OpenAI: {e}")
-            break
-    
     print(f"\n{'='*60}")
     print("Maximum steps reached. Agent terminated.")
     print(f"Completed {max_steps} steps")
