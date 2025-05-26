@@ -10,6 +10,11 @@ on:
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
+    inputs:
+      submission_folder:
+        description: 'Submission folder to run (e.g., submission_a)'
+        required: false
+        type: string
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
@@ -25,8 +30,9 @@ jobs:
         with:
           fetch-depth: 2  # Need to fetch previous commit to compare
 
-      # Detect which submission folder has changes
+      # Detect which submission folder has changes (only for push events)
       - name: Detect changed submission
+        if: github.event_name == 'push'
         id: detect_submission
         run: |
           # Get changed files between HEAD and previous commit
@@ -55,21 +61,57 @@ jobs:
             fi
           fi
 
-      # Make run.sh executable and run it (only if exactly one submission changed)
+      # Set submission folder for manual workflow dispatch
+      - name: Set submission folder for manual dispatch
+        if: github.event_name == 'workflow_dispatch'
+        id: manual_submission
+        run: |
+          SUBMISSION_FOLDER="${{ github.event.inputs.submission_folder }}"
+          
+          if [ -z "$SUBMISSION_FOLDER" ]; then
+            echo "Error: submission_folder input is required for manual workflow dispatch"
+            echo "Available submissions:"
+            ls -1 submissions/ 2>/dev/null | grep -E '^submission_' || echo "No submissions found in submissions/ directory"
+            exit 1
+          fi
+          
+          # Check if submission folder exists
+          if [ ! -d "submissions/$SUBMISSION_FOLDER" ]; then
+            echo "Error: Submission folder 'submissions/$SUBMISSION_FOLDER' does not exist."
+            echo "Available submissions:"
+            ls -1 submissions/ 2>/dev/null | grep -E '^submission_' || echo "No submissions found in submissions/ directory"
+            exit 1
+          fi
+          
+          echo "SUBMISSION_FOLDER=$SUBMISSION_FOLDER" >> $GITHUB_OUTPUT
+          echo "RUN_BUILD=true" >> $GITHUB_OUTPUT
+          echo "Manual workflow dispatch - will build submission: $SUBMISSION_FOLDER"
+
+      # Make run.sh executable and run it
       - name: Run submission using run.sh
-        if: steps.detect_submission.outputs.RUN_BUILD == 'true'
+        if: (github.event_name == 'push' && steps.detect_submission.outputs.RUN_BUILD == 'true') || (github.event_name == 'workflow_dispatch' && steps.manual_submission.outputs.RUN_BUILD == 'true')
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          echo "Running submission using run.sh: ${{ steps.detect_submission.outputs.SUBMISSION_FOLDER }}"
+          # Determine which submission folder to use based on event type
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            SUBMISSION_FOLDER="${{ steps.manual_submission.outputs.SUBMISSION_FOLDER }}"
+          else
+            SUBMISSION_FOLDER="${{ steps.detect_submission.outputs.SUBMISSION_FOLDER }}"
+          fi
+          
+          echo "Running submission using run.sh: $SUBMISSION_FOLDER"
+          
+          # Make run.sh executable
+          chmod +x run.sh
           
           # Run the submission using run.sh
-          ./run.sh ${{ steps.detect_submission.outputs.SUBMISSION_FOLDER }}
+          ./run.sh $SUBMISSION_FOLDER
           
           echo "Submission execution completed successfully!"
 
-      # Skip message
+      # Skip message for push events
       - name: Skip build message
-        if: steps.detect_submission.outputs.RUN_BUILD == 'false'
+        if: github.event_name == 'push' && steps.detect_submission.outputs.RUN_BUILD == 'false'
         run: |
           echo "Build skipped - changes must be in exactly one submission folder"
